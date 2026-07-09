@@ -6,10 +6,41 @@
 // in a BrowserWindow, so the UI, styling and behaviour are byte-identical to
 // the web application. It talks to the same api.eduignite.online backend.
 
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, session } = require('electron');
 const path = require('path');
 const http = require('http');
 const { spawn } = require('child_process');
+
+// The renderer is served from http://127.0.0.1 but the API lives on
+// api.eduignite.online, which only allow-lists the web domain. A browser would
+// block those cross-origin responses (CORS), so we inject permissive CORS
+// headers on responses from our own backend — the standard way a trusted
+// desktop app talks to a CORS-protected API it owns. Auth uses Bearer tokens
+// (no cookies), so a wildcard origin is safe here.
+const API_HOSTS = [
+  'https://api.eduignite.online/*',
+  'http://api.eduignite.online/*',
+];
+
+function installCorsBypass() {
+  session.defaultSession.webRequest.onHeadersReceived(
+    { urls: API_HOSTS },
+    (details, callback) => {
+      const responseHeaders = details.responseHeaders || {};
+      for (const key of Object.keys(responseHeaders)) {
+        if (key.toLowerCase().startsWith('access-control-')) {
+          delete responseHeaders[key];
+        }
+      }
+      responseHeaders['Access-Control-Allow-Origin'] = ['*'];
+      responseHeaders['Access-Control-Allow-Methods'] = [
+        'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+      ];
+      responseHeaders['Access-Control-Allow-Headers'] = ['*'];
+      callback({ responseHeaders });
+    }
+  );
+}
 
 const PORT = 34613;
 const HOST = '127.0.0.1';
@@ -119,6 +150,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  installCorsBypass();
   startServer();
   createWindow();
   app.on('activate', () => {
