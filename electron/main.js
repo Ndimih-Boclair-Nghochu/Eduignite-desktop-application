@@ -89,6 +89,7 @@ function createWindow() {
     minHeight: 680,
     backgroundColor: '#ffffff',
     title: 'EduIgnite',
+    icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
     show: false,
     webPreferences: {

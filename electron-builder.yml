@@ -25,6 +25,7 @@ compression: normal
 win:
   target:
     - nsis
+  icon: build/icon.png
   artifactName: EduIgnite-Setup-${version}.${ext}
 
 nsis:
@@ -38,5 +39,6 @@ nsis:
 linux:
   target:
     - AppImage
+  icon: build/icon.png
   category: Education
   artifactName: EduIgnite-${version}.${ext}

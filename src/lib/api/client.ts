@@ -1,4 +1,11 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import {
+  isOfflineError,
+  readCache,
+  writeCache,
+  enqueue,
+  initOfflineSync,
+} from '@/lib/offline';
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -27,9 +34,72 @@ const processQueue = (error: AxiosError | null, token: string | null = null) => 
 };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Cache successful GET reads so they are available offline (WhatsApp-style).
+    try {
+      const cfg = response.config as InternalAxiosRequestConfig;
+      const method = (cfg.method || 'get').toLowerCase();
+      if (
+        method === 'get' &&
+        response.data &&
+        typeof response.data === 'object' &&
+        !cfg.url?.includes('/auth/')
+      ) {
+        void writeCache(cfg, response.data);
+      }
+    } catch {
+      /* caching is best-effort */
+    }
+    return response;
+  },
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+      headers?: any;
+    };
+
+    // ---- Offline handling ----------------------------------------------
+    // When the request never reached the server, serve cached reads and queue
+    // writes for automatic replay on reconnect. Auth calls and outbox replays
+    // are never intercepted.
+    const isReplay = Boolean(originalRequest?.headers?.['x-eduignite-replay']);
+    const isAuthCall = Boolean(originalRequest?.url?.includes('/auth/'));
+    if (originalRequest && !isReplay && !isAuthCall && isOfflineError(error)) {
+      const method = (originalRequest.method || 'get').toLowerCase();
+      if (method === 'get') {
+        const cached = await readCache(originalRequest);
+        if (cached !== undefined) {
+          return {
+            data: cached,
+            status: 200,
+            statusText: 'OK (offline cache)',
+            headers: {},
+            config: originalRequest,
+            request: null,
+          };
+        }
+      } else {
+        await enqueue(originalRequest);
+        let optimistic: any = {};
+        try {
+          optimistic =
+            typeof originalRequest.data === 'string'
+              ? JSON.parse(originalRequest.data)
+              : originalRequest.data || {};
+        } catch {
+          optimistic = {};
+        }
+        return {
+          data: { ...optimistic, _offlineQueued: true },
+          status: 202,
+          statusText: 'Queued offline',
+          headers: {},
+          config: originalRequest,
+          request: null,
+        };
+      }
+    }
+
     const isBrowser = typeof window !== 'undefined';
     const currentPath = isBrowser ? window.location.pathname : '';
     const refresh = isBrowser ? localStorage.getItem('eduignite_refresh_token') : null;
@@ -93,3 +163,8 @@ export const getAccessToken = () =>
   typeof window !== 'undefined'
     ? localStorage.getItem('eduignite_access_token') || localStorage.getItem('access_token')
     : null;
+
+// Start the offline outbox sync engine (flushes queued writes on reconnect).
+if (typeof window !== 'undefined') {
+  initOfflineSync(apiClient);
+}

@@ -480,64 +480,92 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
+    const CACHE_KEY = "eduignite_user";
+
+    const readCachedUser = (): User | null => {
+      try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        return raw ? (JSON.parse(raw) as User) : null;
+      } catch {
+        return null;
+      }
+    };
+    const cacheUser = (u: User) => {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(u));
+      } catch {
+        /* ignore quota */
+      }
+    };
+    const mapUser = (user: any): User => ({
+      id: user.id || "",
+      uid: user.uid || `user_${user.id}`,
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone,
+      whatsapp: user.whatsapp,
+      role: (user.role as UserRole) || "STUDENT",
+      schoolId: user.schoolId || null,
+      avatar: resolveMediaUrl(user.avatar),
+      school: mapSchoolInfo(user.school),
+      isLicensePaid: user.isLicensePaid || false,
+      aiRequestCount: user.aiRequestCount,
+      annualAvg: user.annualAvg,
+    });
+
     const restoreSession = async () => {
       const accessToken =
         localStorage.getItem("eduignite_access_token") || localStorage.getItem("access_token");
-      if (accessToken) {
-        try {
-          const user = normalizeUser(await authService.getCurrentUser());
-          if (user) {
-            const mappedUser: User = {
-              id: user.id || "",
-              uid: user.uid || `user_${user.id}`,
-              name: user.name || "",
-              email: user.email || "",
-              phone: user.phone,
-              whatsapp: user.whatsapp,
-              role: (user.role as UserRole) || "STUDENT",
-              schoolId: user.schoolId || null,
-              avatar: resolveMediaUrl(user.avatar),
-              school: mapSchoolInfo(user.school),
-              isLicensePaid: user.isLicensePaid || false,
-              aiRequestCount: user.aiRequestCount,
-              annualAvg: user.annualAvg,
-            };
-            setUserData(mappedUser);
-          }
-        } catch (error: any) {
-          if (error.response?.status === 401) {
-            try {
-              await authService.refreshToken();
-              const user = normalizeUser(await authService.getCurrentUser());
-              if (user) {
-                const mappedUser: User = {
-                  id: user.id || "",
-                  uid: user.uid || `user_${user.id}`,
-                  name: user.name || "",
-                  email: user.email || "",
-                  phone: user.phone,
-                  whatsapp: user.whatsapp,
-                  role: (user.role as UserRole) || "STUDENT",
-                  schoolId: user.schoolId || null,
-                  avatar: resolveMediaUrl(user.avatar),
-                  school: mapSchoolInfo(user.school),
-                  isLicensePaid: user.isLicensePaid || false,
-                  aiRequestCount: user.aiRequestCount,
-                  annualAvg: user.annualAvg,
-                };
-                setUserData(mappedUser);
-              }
-            } catch (refreshError) {
+      if (!accessToken) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Offline-first: render the cached account immediately so the app is
+      // usable without waiting for (or requiring) the network.
+      const cached = readCachedUser();
+      if (cached) {
+        setUserData(cached);
+        setIsLoading(false);
+      }
+
+      try {
+        const user = normalizeUser(await authService.getCurrentUser());
+        if (user) {
+          const mappedUser = mapUser(user);
+          setUserData(mappedUser);
+          cacheUser(mappedUser);
+        }
+      } catch (error: any) {
+        const offline = !error?.response; // no response => network/offline
+        if (offline) {
+          // Stay signed in on the cached profile; data syncs when back online.
+          if (!cached) setUserData(null);
+        } else if (error.response?.status === 401) {
+          try {
+            await authService.refreshToken();
+            const user = normalizeUser(await authService.getCurrentUser());
+            if (user) {
+              const mappedUser = mapUser(user);
+              setUserData(mappedUser);
+              cacheUser(mappedUser);
+            }
+          } catch (refreshError: any) {
+            if (!refreshError?.response) {
+              // Offline during refresh — keep the cached session.
+              if (!cached) setUserData(null);
+            } else {
               clearTokens();
               setUserData(null);
             }
-          } else {
-            clearTokens();
-            setUserData(null);
           }
+        } else {
+          // Non-auth server error — keep the cached session if we have one.
+          if (!cached) setUserData(null);
         }
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
 
     restoreSession();
@@ -618,6 +646,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           annualAvg: user.annualAvg,
         };
         setUserData(mappedUser);
+        try {
+          localStorage.setItem("eduignite_user", JSON.stringify(mappedUser));
+        } catch {
+          /* ignore quota */
+        }
 
         const boardRoles = ["CEO", "CTO", "COO", "INV", "SUPER_ADMIN", "DESIGNER"];
         router.push(boardRoles.includes(mappedUser.role) ? "/dashboard" : "/welcome");
@@ -653,6 +686,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           annualAvg: user.annualAvg,
         };
         setUserData(mappedUser);
+        try {
+          localStorage.setItem("eduignite_user", JSON.stringify(mappedUser));
+        } catch {
+          /* ignore quota */
+        }
 
         const boardRoles = ["CEO", "CTO", "COO", "INV", "SUPER_ADMIN", "DESIGNER"];
         router.push(boardRoles.includes(mappedUser.role) ? "/dashboard" : "/welcome");

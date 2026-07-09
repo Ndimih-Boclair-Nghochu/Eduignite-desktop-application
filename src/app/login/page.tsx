@@ -534,23 +534,7 @@ export default function LoginPage() {
             </>
           )}
         </Card>
-
-
-        <div className="mt-4 flex flex-col items-center gap-4">
-          <Button
-            asChild
-            variant="ghost"
-            className="h-auto min-h-14 w-full max-w-sm rounded-[1.5rem] border border-primary/15 bg-white/90 px-5 py-4 text-primary shadow-lg transition-all hover:bg-white hover:text-primary sm:px-8"
-          >
-            <Link href="/community" className="flex w-full items-center justify-center gap-3 text-center">
-              <Sparkles className="h-4 w-4 shrink-0 text-secondary fill-secondary/20" />
-              <span className="text-xs font-black uppercase tracking-[0.2em] leading-relaxed sm:text-[10px] sm:tracking-widest">
-                {t("visitCommunityPortal")}
-              </span>
-              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-50" />
-            </Link>
-          </Button>
-        </div>
+        {/* Community Portal link intentionally excluded from the desktop app. */}
       </div>
     </div>
   );
