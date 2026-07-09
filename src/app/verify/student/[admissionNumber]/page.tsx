@@ -1,0 +1,130 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { CheckCircle2, Loader2, ShieldCheck, XCircle } from "lucide-react";
+import { API } from "@/lib/api/endpoints";
+import { BASE_URL } from "@/lib/api/client";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+interface StudentVerification {
+  valid: boolean;
+  admission_number: string;
+  matricule?: string;
+  student_name: string;
+  school_name: string;
+  school_matricule?: string;
+  class_name: string;
+  section?: string;
+  academic_year?: string;
+  status: string;
+}
+
+export default function StudentCardVerificationPage() {
+  const params = useParams<{ admissionNumber: string }>();
+  const admissionNumber = params.admissionNumber;
+  const [data, setData] = useState<StudentVerification | null>(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function verifyCard() {
+      try {
+        const response = await fetch(`${BASE_URL}${API.STUDENTS.VERIFY_CARD(admissionNumber)}`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error(response.status === 404 ? "No valid student card was found for this admission number." : "The verification service could not confirm this card.");
+        }
+        const payload = (await response.json()) as StudentVerification;
+        if (isMounted) setData(payload);
+      } catch (err) {
+        if (isMounted) setError(err instanceof Error ? err.message : "Verification failed.");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+    if (admissionNumber) void verifyCard();
+    return () => {
+      isMounted = false;
+    };
+  }, [admissionNumber]);
+
+  return (
+    <main className="min-h-screen bg-slate-50 px-4 py-10">
+      <div className="mx-auto flex max-w-xl flex-col gap-6">
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-lg">
+            <ShieldCheck className="h-7 w-7" />
+          </div>
+          <h1 className="text-2xl font-black text-primary">EduIgnite Student Card Verification</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Official QR verification for Cameroon secondary school ID cards.</p>
+        </div>
+
+        <Card className="border-none shadow-xl">
+          <CardHeader className="border-b bg-white">
+            <CardTitle className="flex items-center justify-between text-base">
+              Card Status
+              {loading ? (
+                <Badge variant="outline">Checking</Badge>
+              ) : data?.valid ? (
+                <Badge className="bg-green-100 text-green-700">Verified</Badge>
+              ) : (
+                <Badge variant="destructive">Not verified</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5 p-6">
+            {loading ? (
+              <div className="flex h-44 flex-col items-center justify-center gap-3 text-muted-foreground">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm font-semibold">Checking student card...</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <XCircle className="h-12 w-12 text-destructive" />
+                <p className="font-bold text-primary">{error}</p>
+                <p className="text-sm text-muted-foreground">Please contact the school administration if this card should be valid.</p>
+              </div>
+            ) : data ? (
+              <>
+                <div className="flex items-center gap-3 rounded-2xl bg-green-50 p-4 text-green-700">
+                  <CheckCircle2 className="h-6 w-6 shrink-0" />
+                  <p className="text-sm font-bold">This student card is registered in EduIgnite.</p>
+                </div>
+                <div className="grid gap-3 text-sm">
+                  <InfoRow label="Student" value={data.student_name} />
+                  <InfoRow label="Admission No." value={data.admission_number} />
+                  <InfoRow label="Matricule" value={data.matricule || "-"} />
+                  <InfoRow label="Class" value={data.class_name} />
+                  <InfoRow label="Section" value={data.section || "-"} />
+                  <InfoRow label="School" value={data.school_name} />
+                  <InfoRow label="School Matricule" value={data.school_matricule || "-"} />
+                  <InfoRow label="Academic Year" value={data.academic_year || "Current"} />
+                  <InfoRow label="Account Status" value={data.status} />
+                </div>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Button asChild variant="outline" className="h-11 rounded-xl">
+          <Link href="/">Go to EduIgnite</Link>
+        </Button>
+      </div>
+    </main>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-2">
+      <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">{label}</span>
+      <span className="text-right font-bold text-primary">{value}</span>
+    </div>
+  );
+}
