@@ -31,6 +31,9 @@ import {
   Crown,
   Wallet,
   Quote,
+  CalendarDays,
+  PlaySquare,
+  HandHeart,
   Network,
   Star,
   BarChart3,
@@ -165,6 +168,31 @@ export function DashboardSidebar({ onClose }: SidebarProps) {
       roles: ["SCHOOL_ADMIN", "SUB_ADMIN"],
     },
     // Community Portal is intentionally excluded from the desktop application.
+    // The former footer actions now live here, alongside the other tabs.
+    {
+      label: language === "en" ? "School Events" : "Événements",
+      icon: CalendarDays,
+      href: "/dashboard/school-events",
+      roles: ["SCHOOL_ADMIN", "SUB_ADMIN", "TEACHER", "STUDENT", "PARENT", "BURSAR", "LIBRARIAN"],
+    },
+    {
+      label: language === "en" ? "Training" : "Formation",
+      icon: PlaySquare,
+      href: "/dashboard/training",
+      roles: ["SCHOOL_ADMIN", "SUB_ADMIN", "TEACHER", "STUDENT", "PARENT", "BURSAR", "LIBRARIAN"],
+    },
+    {
+      label: language === "en" ? "Support Us" : "Soutien",
+      icon: HandHeart,
+      href: "/dashboard/support-us",
+      roles: ["SCHOOL_ADMIN", "SUB_ADMIN", "TEACHER", "STUDENT", "PARENT", "BURSAR", "LIBRARIAN"],
+    },
+    {
+      label: language === "en" ? "Testimony" : "Témoignage",
+      icon: Quote,
+      href: "/dashboard/testimony",
+      roles: ["SCHOOL_ADMIN", "SUB_ADMIN", "TEACHER", "STUDENT", "PARENT", "BURSAR", "LIBRARIAN"],
+    },
     {
       label: t("chat"),
       icon: MessageCircle,
