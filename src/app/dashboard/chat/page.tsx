@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -317,7 +317,7 @@ export default function ChatPage() {
       sender_id: user?.id,
       sender_name: user?.name,
       sender_avatar: user?.avatar,
-      text: text || (file ? (file.type.startsWith("image/") ? "📷 Photo" : `📄 ${file.name}`) : ""),
+      text: text || (file ? (file.type.startsWith("image/") ? "ðŸ“· Photo" : `ðŸ“„ ${file.name}`) : ""),
       message_type: file ? (file.type.startsWith("image/") ? "image" : "file") : "text",
       created_at: new Date().toISOString(),
       is_official: isExecutive,
@@ -504,7 +504,7 @@ export default function ChatPage() {
   const threadSubtitle = selectedConv
     ? selectedConv.conversation_type === "direct"
       ? "Direct message"
-      : `${(selectedConv.participants || []).length} participants${selectedConv.school_class_name ? ` • ${selectedConv.school_class_name}` : ""}`
+      : `${(selectedConv.participants || []).length} participants${selectedConv.school_class_name ? ` â€¢ ${selectedConv.school_class_name}` : ""}`
     : "";
 
   return (
@@ -686,7 +686,7 @@ export default function ChatPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-black leading-tight">{currentConversationDisplay?.name}</p>
                   <p className="truncate text-[11px] text-white/70">
-                    {selectedConv.only_admins_can_send ? "Admin-only • " : ""}
+                    {selectedConv.only_admins_can_send ? "Admin-only â€¢ " : ""}
                     {threadSubtitle}
                   </p>
                 </div>
@@ -734,10 +734,10 @@ export default function ChatPage() {
                       new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString();
                     const showSender =
                       isGroup && !isOwn && (!previous || String(getMessageSenderId(previous)) !== String(senderId) || showDaySeparator);
-                    const attachmentUrl = message._localPreview || (message.attachment ? resolveMediaUrl(message.attachment) : "");
+                    const attachmentUrl = message._localPreview || message.attachment_data || (message.attachment ? resolveMediaUrl(message.attachment) : "");
                     const isImage = message.message_type === "image" && attachmentUrl;
                     const isFile = message.message_type === "file" && (attachmentUrl || message._localFileName);
-                    const captionIsAuto = /^(📷 Photo|📄 )/.test(message.text || "");
+                    const captionIsAuto = /^(ðŸ“· Photo|ðŸ“„ )/.test(message.text || "");
 
                     return (
                       <div key={message.id}>
@@ -777,6 +777,7 @@ export default function ChatPage() {
                             {isFile ? (
                               <a
                                 href={attachmentUrl || undefined}
+                                download={message.attachment_name || undefined}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className={cn(
@@ -794,7 +795,7 @@ export default function ChatPage() {
                                 </span>
                                 <span className="min-w-0">
                                   <span className="block truncate text-[13px] font-bold">
-                                    {message._localFileName || (attachmentUrl ? attachmentName(attachmentUrl) : "Document")}
+                                    {message._localFileName || message.attachment_name || (attachmentUrl ? attachmentName(attachmentUrl) : "Document")}
                                   </span>
                                   <span className={cn("text-[11px]", isOwn ? "text-white/70" : "text-muted-foreground")}>
                                     Document
@@ -841,7 +842,7 @@ export default function ChatPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-bold">{pendingFile.name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {(pendingFile.size / 1024 / 1024).toFixed(2)} MB • ready to send
+                        {(pendingFile.size / 1024 / 1024).toFixed(2)} MB â€¢ ready to send
                       </p>
                     </div>
                     <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={clearPendingFile}>
