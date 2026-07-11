@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import { useAuth, type UserRole } from "@/lib/auth-context";
@@ -16,6 +16,7 @@ import { resolvePlatformLogoUrl } from "@/lib/platform-brand";
 import { getLicenseAccessState } from "@/lib/license";
 import { useI18n } from "@/lib/i18n-context";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { NotificationWatcher } from "@/components/notification-watcher";
 
 const EXECUTIVE_ROLES: UserRole[] = ["SUPER_ADMIN", "CEO", "CTO", "COO", "INV", "DESIGNER"];
 
@@ -96,6 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-dvh flex-col md:flex-row bg-background">
+      <NotificationWatcher />
       <aside className="hidden md:flex w-64 shrink-0 h-full">
         <DashboardSidebar />
       </aside>

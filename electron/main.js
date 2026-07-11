@@ -150,6 +150,9 @@ function createWindow() {
   });
 }
 
+// Windows toast notifications show the app name/icon only with an AppUserModelID.
+app.setAppUserModelId('online.eduignite.desktop');
+
 app.whenReady().then(() => {
   installCorsBypass();
   startServer();
