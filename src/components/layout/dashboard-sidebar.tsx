@@ -170,6 +170,12 @@ export function DashboardSidebar({ onClose }: SidebarProps) {
     // Community Portal is intentionally excluded from the desktop application.
     // The former footer actions now live here, alongside the other tabs.
     {
+      label: language === "en" ? "Community" : "Communauté",
+      icon: Users,
+      href: "/dashboard/community-hub",
+      roles: ["SCHOOL_ADMIN", "SUB_ADMIN", "TEACHER", "STUDENT", "PARENT", "BURSAR", "LIBRARIAN"],
+    },
+    {
       label: language === "en" ? "School Events" : "Événements",
       icon: CalendarDays,
       href: "/dashboard/school-events",

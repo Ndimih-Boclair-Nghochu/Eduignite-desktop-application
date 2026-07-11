@@ -18,7 +18,8 @@
 /out/
 
 # production
-/build
+# NOTE: /build is intentionally NOT ignored — it holds the electron-builder
+# icon resources (icon.png / icon.ico) that CI needs to brand the installer.
 
 # misc
 .DS_Store

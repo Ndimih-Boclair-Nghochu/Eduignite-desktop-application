@@ -25,7 +25,9 @@ compression: normal
 win:
   target:
     - nsis
-  icon: build/icon.png
+  # Multi-size .ico generated from the EduIgnite shield logo — used for the
+  # app window, taskbar, desktop shortcut, installer and uninstaller.
+  icon: build/icon.ico
   artifactName: EduIgnite-Setup-${version}.${ext}
 
 nsis:
@@ -35,6 +37,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: EduIgnite
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
 
 linux:
   target:

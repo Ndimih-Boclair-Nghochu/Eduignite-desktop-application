@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
@@ -33,7 +33,9 @@ import {
   BookOpen,
   GraduationCap,
   FileStack,
+  Pencil,
 } from "lucide-react";
+import { apiClient } from "@/lib/api/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
@@ -179,7 +181,7 @@ const useUsers = (params: any, enabled = true, mode: StaffRegistryMode = "active
         : await usersService.getUsers(params);
       return normalizeResults(response);
     },
-    initialData: [],
+    placeholderData: [] as any[],
     enabled,
   });
 };
@@ -191,7 +193,7 @@ const useStaffRemarks = (params: any) => {
       const { staffRemarksService } = await import("@/lib/api/services/staff-remarks.service");
       return normalizeResults(await staffRemarksService.getRemarks(params));
     },
-    initialData: [],
+    placeholderData: [] as any[],
   });
 };
 
@@ -202,7 +204,7 @@ const useMyRemarks = () => {
       const { staffRemarksService } = await import("@/lib/api/services/staff-remarks.service");
       return normalizeResults(await staffRemarksService.getMyRemarks());
     },
-    initialData: [],
+    placeholderData: [] as any[],
   });
 };
 
@@ -241,7 +243,7 @@ const useSchools = () => {
   return useQuery({
     queryKey: ["staff-school-options"],
     queryFn: async () => normalizeResults(await schoolsService.getSchools()),
-    initialData: [],
+    placeholderData: [] as any[],
   });
 };
 
@@ -277,6 +279,43 @@ export default function StaffPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [createdStaff, setCreatedStaff] = useState<any>(null);
   const [viewingStaff, setViewingStaff] = useState<any | null>(null);
+
+  // Admin edit of a staff member's information (name, email, phone, whatsapp).
+  const [editingStaff, setEditingStaff] = useState<any | null>(null);
+  const [editStaffForm, setEditStaffForm] = useState({ name: "", email: "", phone: "", whatsapp: "" });
+  const openEditStaff = (staff: any) => {
+    setEditStaffForm({
+      name: staff.name || "",
+      email: staff.email || "",
+      phone: staff.phone || "",
+      whatsapp: staff.whatsapp || "",
+    });
+    setEditingStaff(staff);
+  };
+  const updateStaffMutation = useMutation({
+    mutationFn: async () => {
+      const payload: Record<string, string> = {};
+      (Object.keys(editStaffForm) as (keyof typeof editStaffForm)[]).forEach((key) => {
+        payload[key] = editStaffForm[key].trim();
+      });
+      const { data } = await apiClient.patch(`/users/${editingStaff.id}/`, payload);
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "Staff updated", description: "The staff member's information has been saved." });
+      setEditingStaff(null);
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["staff-detail"] });
+    },
+    onError: (error: any) => {
+      const data = error?.response?.data;
+      const detail =
+        (data && typeof data === "object"
+          ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" | ")
+          : "") || "The staff member could not be updated.";
+      toast({ variant: "destructive", title: "Update failed", description: detail });
+    },
+  });
 
   const [newRemark, setNewRemark] = useState({
     staffId: "",
@@ -346,19 +385,19 @@ export default function StaffPage() {
     queryKey: ["staff-sub-school-options", selectedSchoolId],
     queryFn: () => schoolsService.getSubSchools(selectedSchoolId),
     enabled: Boolean(selectedSchoolId),
-    initialData: [],
+    placeholderData: [] as any[],
   });
   const classesQuery = useQuery<HierarchyClass[]>({
     queryKey: ["staff-hierarchy-classes", selectedSchoolId],
     queryFn: () => schoolsService.getSchoolClasses(selectedSchoolId),
     enabled: Boolean(selectedSchoolId),
-    initialData: [],
+    placeholderData: [] as any[],
   });
   const subjectLinksQuery = useQuery<HierarchyClassSubject[]>({
     queryKey: ["staff-hierarchy-subject-links", selectedSchoolId],
     queryFn: () => schoolsService.getHierarchySubjects({ school_id: selectedSchoolId }),
     enabled: Boolean(selectedSchoolId),
-    initialData: [],
+    placeholderData: [] as any[],
   });
   const subSchoolOptions = subSchoolsQuery.data ?? [];
   const hierarchyClasses = classesQuery.data ?? [];
@@ -820,6 +859,16 @@ export default function StaffPage() {
                     >
                       <Eye className="h-4 w-4" /> View
                     </Button>
+                    {isAdmin && staffRegistryMode !== "draft" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 rounded-xl text-[10px] font-black uppercase tracking-widest border-primary/30 text-primary"
+                        onClick={() => openEditStaff(staff)}
+                      >
+                        <Pencil className="h-4 w-4" /> Edit
+                      </Button>
+                    ) : null}
                     {staffRegistryMode === "draft" ? (
                       <Button
                         size="sm"
@@ -1198,6 +1247,43 @@ export default function StaffPage() {
       </Dialog>
 
       {/* Staff details view */}
+      <Dialog open={!!editingStaff} onOpenChange={(open) => { if (!open) setEditingStaff(null); }}>
+        <DialogContent className="max-w-md rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-black text-primary">
+              <Pencil className="h-4 w-4" /> Edit Staff Information
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Update {editingStaff?.name || "this staff member"}&apos;s details. Matricule and role stay unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {([
+              ["name", "Full name"],
+              ["email", "Email"],
+              ["phone", "Phone"],
+              ["whatsapp", "WhatsApp (optional)"],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
+                <Input
+                  value={editStaffForm[key]}
+                  onChange={(e) => setEditStaffForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                  className="h-11 rounded-xl bg-accent/30 border-none"
+                />
+              </div>
+            ))}
+            <Button
+              className="mt-2 h-12 w-full rounded-2xl font-black uppercase text-xs"
+              onClick={() => updateStaffMutation.mutate()}
+              disabled={updateStaffMutation.isPending || !editStaffForm.name.trim()}
+            >
+              {updateStaffMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!viewingStaff} onOpenChange={(open) => { if (!open) setViewingStaff(null); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1223,7 +1309,7 @@ export default function StaffPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Matricule</p>
-                  <p className="mt-1 font-mono text-sm font-bold text-primary break-all">{staffDetail.matricule || "—"}</p>
+                  <p className="mt-1 font-mono text-sm font-bold text-primary break-all">{staffDetail.matricule || "â€”"}</p>
                 </div>
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Status</p>
@@ -1231,32 +1317,32 @@ export default function StaffPage() {
                 </div>
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1"><Mail className="h-3 w-3" /> Email</p>
-                  <p className="mt-1 text-sm font-bold text-primary break-all">{staffDetail.email || "—"}</p>
+                  <p className="mt-1 text-sm font-bold text-primary break-all">{staffDetail.email || "â€”"}</p>
                 </div>
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1"><Phone className="h-3 w-3" /> Phone / WhatsApp</p>
-                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.phone || "—"}{staffDetail.whatsapp ? ` / ${staffDetail.whatsapp}` : ""}</p>
+                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.phone || "â€”"}{staffDetail.whatsapp ? ` / ${staffDetail.whatsapp}` : ""}</p>
                 </div>
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1"><Building2 className="h-3 w-3" /> School</p>
-                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.school?.name || userSchoolName || "—"}</p>
+                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.school?.name || userSchoolName || "â€”"}</p>
                 </div>
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Sub-school</p>
-                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.sub_school?.name || staffDetail.sub_school_name || "—"}</p>
+                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.sub_school?.name || staffDetail.sub_school_name || "â€”"}</p>
                 </div>
                 <div className="rounded-xl border bg-secondary/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1"><FileStack className="h-3 w-3" /> Materials Uploaded</p>
                   <p className="mt-1 text-2xl font-black text-primary">{staffDetail.materials_count ?? 0}</p>
                   {staffDetail.materials_breakdown ? (
                     <p className="text-[10px] text-muted-foreground">
-                      {staffDetail.materials_breakdown.assignments ?? 0} assignments · {staffDetail.materials_breakdown.ai_exam_drafts ?? 0} exam drafts
+                      {staffDetail.materials_breakdown.assignments ?? 0} assignments Â· {staffDetail.materials_breakdown.ai_exam_drafts ?? 0} exam drafts
                     </p>
                   ) : null}
                 </div>
                 <div className="rounded-xl border bg-accent/10 p-4">
                   <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Joined</p>
-                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.date_joined ? new Date(staffDetail.date_joined).toLocaleDateString() : "—"}</p>
+                  <p className="mt-1 text-sm font-bold text-primary">{staffDetail.date_joined ? new Date(staffDetail.date_joined).toLocaleDateString() : "â€”"}</p>
                 </div>
               </div>
 
@@ -1274,7 +1360,7 @@ export default function StaffPage() {
                     <div className="flex flex-wrap gap-2">
                       {assignments.map((a: any, idx: number) => (
                         <Badge key={a.id || idx} variant="outline" className="border-primary/10 text-[10px] font-bold text-primary">
-                          {a.class_name || "Class"} — {a.subject_name || "Subject"}
+                          {a.class_name || "Class"} â€” {a.subject_name || "Subject"}
                         </Badge>
                       ))}
                     </div>
