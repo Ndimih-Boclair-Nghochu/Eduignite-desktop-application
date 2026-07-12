@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import {
@@ -31,6 +31,23 @@ function timeAgo(iso?: string) {
 
 export function HeaderNotifications() {
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Opening the bell counts as viewing — mark everything read so the red badge
+  // clears immediately, then refresh the count and list.
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      apiClient
+        .post("/notifications/notifications/mark_all_read/")
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["header-notifications-unread"] });
+          queryClient.invalidateQueries({ queryKey: ["header-notifications"] });
+          queryClient.invalidateQueries({ queryKey: ["notifications"] });
+        })
+        .catch(() => {});
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["header-notifications"],
@@ -49,7 +66,7 @@ export function HeaderNotifications() {
   const unread = Number((unreadData as any)?.unread_count ?? (unreadData as any)?.count ?? 0) || 0;
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Notifications"
