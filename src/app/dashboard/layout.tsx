@@ -17,6 +17,7 @@ import { getLicenseAccessState } from "@/lib/license";
 import { useI18n } from "@/lib/i18n-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { NotificationWatcher } from "@/components/notification-watcher";
+import { HeaderNotifications } from "@/components/header-notifications";
 
 const EXECUTIVE_ROLES: UserRole[] = ["SUPER_ADMIN", "CEO", "CTO", "COO", "INV", "DESIGNER"];
 
@@ -147,7 +148,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {dashboardTitle}
             </p>
           </div>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-1">
+            <HeaderNotifications />
+            <LanguageSwitcher />
+          </div>
         </header>
 
         <main className="flex-1 overflow-y-auto">
