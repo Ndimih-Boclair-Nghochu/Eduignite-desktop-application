@@ -33,6 +33,8 @@ import {
   Search,
   Send,
   Settings2,
+  ShieldCheck,
+  Smile,
   Users,
   UserPlus,
   UserX,
@@ -168,6 +170,10 @@ export default function ChatPage() {
 
   const [selectedConv, setSelectedConv] = useState<any>(null);
   const [messageText, setMessageText] = useState("");
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
+  const typingIdleRef = useRef<any>(null);
+  const lastTypingPingRef = useRef<number>(0);
   const [conversations, setConversations] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [isLoadingConvs, setIsLoadingConvs] = useState(true);
@@ -282,12 +288,56 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!selectedConv) return;
+    const convId = String(selectedConv.id);
+    const pollTyping = () => {
+      chatService
+        .getTyping(convId)
+        .then((res) => setTypingUsers((res.typing || []).map((t) => t.user_name).filter(Boolean)))
+        .catch(() => {});
+    };
+    pollTyping();
     const interval = window.setInterval(() => {
-      loadMessages(String(selectedConv.id), true);
+      loadMessages(convId, true);
       loadConversations();
+      pollTyping();
     }, 5000);
-    return () => window.clearInterval(interval);
+    const typingInterval = window.setInterval(pollTyping, 2500);
+    return () => {
+      window.clearInterval(interval);
+      window.clearInterval(typingInterval);
+    };
   }, [selectedConv?.id, loadMessages, loadConversations]);
+
+  // Clear the typing list when switching conversations.
+  useEffect(() => {
+    setTypingUsers([]);
+    setReactionPickerFor(null);
+  }, [selectedConv?.id]);
+
+  const pingTyping = useCallback(() => {
+    if (!selectedConv) return;
+    const convId = String(selectedConv.id);
+    const now = Date.now();
+    if (now - lastTypingPingRef.current > 3000) {
+      lastTypingPingRef.current = now;
+      chatService.setTyping(convId, true).catch(() => {});
+    }
+    if (typingIdleRef.current) clearTimeout(typingIdleRef.current);
+    typingIdleRef.current = setTimeout(() => {
+      chatService.setTyping(convId, false).catch(() => {});
+      lastTypingPingRef.current = 0;
+    }, 3500);
+  }, [selectedConv]);
+
+  const handleReact = useCallback(async (messageId: string, emoji: string) => {
+    setReactionPickerFor(null);
+    try {
+      const updated = await chatService.reactToMessage(messageId, emoji);
+      setMessages((prev) => prev.map((m) => (String(m.id) === String(messageId) ? { ...m, reactions: (updated as any).reactions } : m)));
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Reaction failed", description: parseDRFError(err) });
+    }
+  }, [toast]);
 
   const clearPendingFile = () => {
     if (pendingPreview) URL.revokeObjectURL(pendingPreview);
@@ -334,6 +384,10 @@ export default function ChatPage() {
     setPendingPreview(null);
     scrollToBottom();
     setIsSending(true);
+    // Stop broadcasting "typing" as soon as the message goes out.
+    if (typingIdleRef.current) clearTimeout(typingIdleRef.current);
+    lastTypingPingRef.current = 0;
+    chatService.setTyping(String(selectedConv.id), false).catch(() => {});
 
     try {
       const sent = file
@@ -454,6 +508,22 @@ export default function ChatPage() {
       await loadConversations();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Add participant failed", description: parseDRFError(err) });
+    } finally {
+      setIsUpdatingGroup(false);
+    }
+  };
+
+  const handleSetRole = async (userId: string, role: "admin" | "member") => {
+    if (!selectedConv) return;
+    setIsUpdatingGroup(true);
+    try {
+      await chatService.setParticipantRole(String(selectedConv.id), userId, role);
+      const updated = await chatService.getConversation(String(selectedConv.id));
+      setSelectedConv(updated);
+      await loadConversations();
+      toast({ title: role === "admin" ? "Admin added" : "Admin dismissed", description: role === "admin" ? "This member can now manage the group." : "This member is no longer an admin." });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Role update failed", description: parseDRFError(err) });
     } finally {
       setIsUpdatingGroup(false);
     }
@@ -768,7 +838,8 @@ export default function ChatPage() {
                             </span>
                           </div>
                         )}
-                        <div className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
+                        <div className={cn("group flex flex-col", isOwn ? "items-end" : "items-start")}>
+                          <div className={cn("flex items-center gap-1", isOwn ? "flex-row-reverse" : "flex-row")}>
                           <div
                             className={cn(
                               "relative max-w-[78%] rounded-2xl px-3 py-2 shadow-sm",
@@ -816,6 +887,51 @@ export default function ChatPage() {
                                 (message._pending ? <Clock3 className="h-3 w-3" /> : messageSeen(message) ? <CheckCheck className="h-3.5 w-3.5 text-sky-300" /> : <Check className="h-3 w-3" />)}
                             </span>
                           </div>
+                          {!message._pending && !message.is_deleted && (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                aria-label="React"
+                                onClick={() => setReactionPickerFor((prev) => (prev === String(message.id) ? null : String(message.id)))}
+                                className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
+                              >
+                                <Smile className="h-4 w-4" />
+                              </button>
+                              {reactionPickerFor === String(message.id) && (
+                                <div className={cn("absolute z-20 -top-10 flex gap-1 rounded-full border bg-white px-2 py-1 shadow-lg", isOwn ? "right-0" : "left-0")}>
+                                  {["👍", "❤️", "😂", "😮", "😢", "🙏"].map((emoji) => (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => handleReact(String(message.id), emoji)}
+                                      className="text-lg transition-transform hover:scale-125"
+                                    >
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          </div>
+                          {Array.isArray(message.reactions) && message.reactions.length > 0 && (
+                            <div className={cn("mt-0.5 flex flex-wrap gap-1", isOwn ? "justify-end" : "justify-start")}>
+                              {message.reactions.map((reaction: any) => (
+                                <button
+                                  key={reaction.emoji}
+                                  type="button"
+                                  onClick={() => handleReact(String(message.id), reaction.emoji)}
+                                  className={cn(
+                                    "flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[11px] leading-none transition-colors",
+                                    reaction.reacted ? "border-primary/40 bg-primary/10 text-primary" : "border-accent bg-white text-muted-foreground"
+                                  )}
+                                >
+                                  <span>{reaction.emoji}</span>
+                                  <span className="font-bold">{reaction.count}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -825,6 +941,18 @@ export default function ChatPage() {
 
               {/* composer */}
               <div className="shrink-0 px-3 pb-3 pt-1">
+                {typingUsers.length > 0 && (
+                  <div className="mx-auto mb-1.5 flex max-w-3xl items-center gap-2 px-2 text-[11px] font-medium text-muted-foreground">
+                    <span className="flex gap-0.5">
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:-0.2s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50 [animation-delay:-0.1s]" />
+                      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary/50" />
+                    </span>
+                    {typingUsers.length === 1
+                      ? `${typingUsers[0]} is typing…`
+                      : `${typingUsers.slice(0, 2).join(", ")}${typingUsers.length > 2 ? " and others" : ""} are typing…`}
+                  </div>
+                )}
                 {pendingFile && (
                   <div className="mx-auto mb-1.5 flex max-w-3xl items-center gap-3 rounded-2xl bg-white p-2.5 shadow-sm">
                     {pendingPreview ? (
@@ -880,7 +1008,7 @@ export default function ChatPage() {
                     </Button>
                     <Input
                       value={messageText}
-                      onChange={(event) => setMessageText(event.target.value)}
+                      onChange={(event) => { setMessageText(event.target.value); pingTyping(); }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" && !event.shiftKey) {
                           event.preventDefault();
@@ -1238,17 +1366,31 @@ export default function ChatPage() {
                             </div>
                           </div>
                         </div>
-                        {!participantIsAdmin && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-2 rounded-xl"
-                            onClick={() => handleRemoveParticipant(participantId)}
-                            disabled={isUpdatingGroup}
-                          >
-                            <UserX className="w-3.5 h-3.5" />
-                            Remove
-                          </Button>
+                        {currentUserIsGroupAdmin && participantId !== String(user?.id) && (
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5 rounded-xl"
+                              onClick={() => handleSetRole(participantId, participantIsAdmin ? "member" : "admin")}
+                              disabled={isUpdatingGroup}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              {participantIsAdmin ? "Dismiss admin" : "Make admin"}
+                            </Button>
+                            {!participantIsAdmin && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 rounded-xl"
+                                onClick={() => handleRemoveParticipant(participantId)}
+                                disabled={isUpdatingGroup}
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                                Remove
+                              </Button>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
