@@ -32,22 +32,60 @@ export default function StudentCardVerificationPage() {
 
   useEffect(() => {
     let isMounted = true;
-    async function verifyCard() {
-      try {
-        const response = await fetch(`${BASE_URL}${API.STUDENTS.VERIFY_CARD(admissionNumber)}`, {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          throw new Error(response.status === 404 ? "No valid student card was found for this admission number." : "The verification service could not confirm this card.");
+
+    // This public QR page is opened on the phone's browser, where a build-time
+    // API URL is often missing (defaulting to localhost) — which made every
+    // card read "Not verified". Try a list of candidate API bases so it works
+    // regardless of how the API is exposed: same-origin /api/v1 first (no CORS),
+    // then the api. subdomain, then the configured base.
+    function candidateBases(): string[] {
+      const bases: string[] = [];
+      if (typeof window !== "undefined") {
+        const { origin, hostname } = window.location;
+        const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+        if (!isLocal) {
+          bases.push(`${origin}/api/v1`);
+          const root = hostname.replace(/^www\./, "").replace(/^(admin|dashboard|app)\./, "");
+          bases.push(`https://api.${root}/api/v1`);
         }
-        const payload = (await response.json()) as StudentVerification;
-        if (isMounted) setData(payload);
-      } catch (err) {
-        if (isMounted) setError(err instanceof Error ? err.message : "Verification failed.");
-      } finally {
-        if (isMounted) setLoading(false);
+      }
+      if (BASE_URL) bases.push(BASE_URL);
+      return Array.from(new Set(bases));
+    }
+
+    async function verifyCard() {
+      const bases = candidateBases();
+      let lastError = "Verification failed.";
+      for (const base of bases) {
+        try {
+          const response = await fetch(`${base}${API.STUDENTS.VERIFY_CARD(admissionNumber)}`, {
+            cache: "no-store",
+          });
+          if (response.ok) {
+            const payload = (await response.json()) as StudentVerification;
+            if (isMounted) {
+              setData(payload);
+              setLoading(false);
+            }
+            return;
+          }
+          if (response.status === 404) {
+            // A reachable API that doesn't know this card — definitive answer.
+            lastError = "No valid student card was found for this admission number.";
+            break;
+          }
+          lastError = "The verification service could not confirm this card.";
+        } catch {
+          // Network/CORS error for this base — try the next candidate.
+          lastError = "You appear to be offline. Please check your connection and scan again.";
+        }
+      }
+      if (isMounted) {
+        setError(lastError);
+        setLoading(false);
       }
     }
+
     if (admissionNumber) void verifyCard();
     return () => {
       isMounted = false;
