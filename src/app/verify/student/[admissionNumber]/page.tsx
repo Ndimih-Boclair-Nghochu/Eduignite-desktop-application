@@ -55,13 +55,15 @@ export default function StudentCardVerificationPage() {
 
     async function verifyCard() {
       const bases = candidateBases();
-      let lastError = "Verification failed.";
+      let lastError = "You appear to be offline. Please check your connection and scan again.";
+      let sawApiNotFound = false;
       for (const base of bases) {
         try {
           const response = await fetch(`${base}${API.STUDENTS.VERIFY_CARD(admissionNumber)}`, {
             cache: "no-store",
           });
-          if (response.ok) {
+          const isJson = (response.headers.get("content-type") || "").includes("application/json");
+          if (response.ok && isJson) {
             const payload = (await response.json()) as StudentVerification;
             if (isMounted) {
               setData(payload);
@@ -69,19 +71,19 @@ export default function StudentCardVerificationPage() {
             }
             return;
           }
-          if (response.status === 404) {
-            // A reachable API that doesn't know this card — definitive answer.
+          // A JSON 404 is the real API saying the card is unknown. A non-JSON
+          // 404 just means this origin isn't the API (e.g. the web app) — keep
+          // trying the other candidate bases.
+          if (response.status === 404 && isJson) {
+            sawApiNotFound = true;
             lastError = "No valid student card was found for this admission number.";
-            break;
           }
-          lastError = "The verification service could not confirm this card.";
         } catch {
           // Network/CORS error for this base — try the next candidate.
-          lastError = "You appear to be offline. Please check your connection and scan again.";
         }
       }
       if (isMounted) {
-        setError(lastError);
+        setError(sawApiNotFound ? "No valid student card was found for this admission number." : lastError);
         setLoading(false);
       }
     }
