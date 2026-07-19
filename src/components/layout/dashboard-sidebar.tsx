@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth, type UserRole } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
+import { useSchoolSettings } from "@/lib/hooks/useSchools";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/media";
 import {
@@ -73,6 +74,9 @@ export function DashboardSidebar({ onClose }: SidebarProps) {
   const isDesigner = normalizedRole === "DESIGNER";
   const isBursar = normalizedRole === "BURSAR";
   const isSchoolAdmin = normalizedRole === "SCHOOL_ADMIN" || normalizedRole === "SUB_ADMIN";
+  const isTeacherRole = normalizedRole === "TEACHER";
+  const { data: sidebarSchoolSettings } = useSchoolSettings(isTeacherRole ? (user?.school?.id || "") : "");
+  const classMastersCanEditStudents = Boolean((sidebarSchoolSettings as any)?.class_masters_can_edit_students);
   const schoolLogo = resolveMediaUrl(user?.school?.logo);
   const userAvatar = resolveMediaUrl(user?.avatar);
   const platformLogo = resolvePlatformLogoUrl(platformSettings.logo);
@@ -144,6 +148,15 @@ export function DashboardSidebar({ onClose }: SidebarProps) {
       href: "/dashboard/grades",
       roles: ["TEACHER"],
     },
+    // Only when the school admin has granted class masters student-edit rights.
+    ...(classMastersCanEditStudents
+      ? [{
+          label: language === "en" ? "Student Management" : "Gestion des eleves",
+          icon: Users,
+          href: "/dashboard/student-management",
+          roles: ["TEACHER"] as UserRole[],
+        }]
+      : []),
     {
       label: language === "en" ? "Strategic Insights" : "Statistiques Strategiques",
       icon: BarChart3,
