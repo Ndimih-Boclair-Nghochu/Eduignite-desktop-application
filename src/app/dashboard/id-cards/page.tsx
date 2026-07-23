@@ -1,11 +1,12 @@
 
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
 import { useStudents } from "@/lib/hooks/useStudents";
 import { StudentIdCard } from "@/components/student-id-card";
+import { downloadIdCardsPdf, printIdCardsPdf } from "@/lib/id-card-pdf";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,8 @@ export default function IdCardsPage() {
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  // The preview holds the live cards the PDF is captured from.
+  const previewRef = useRef<HTMLDivElement>(null);
 
   // Fetch real student data from API
   const { data: studentsApiData } = useStudents({ search: searchTerm || undefined, include_qr: true });
@@ -145,21 +148,31 @@ export default function IdCardsPage() {
     link.remove();
   };
 
-  const handleDownloadPdf = async () => {
+  // Both actions build the same file: one CR80 card per page, each side on its
+  // own page. Printing the page itself put the whole batch on one sheet at
+  // screen size, which is what lost the card proportions.
+  const buildPdf = async (deliver: (root: HTMLElement) => Promise<void>, doneMessage: string) => {
     if (selectedStudents.length === 0) {
       toast({ variant: "destructive", title: "No Students Selected", description: "Please select at least one student to generate IDs." });
       return;
     }
-    // Save-as-PDF uses the exact on-screen card via the system print dialog, so
-    // the downloaded file is pixel-identical to the preview on every platform.
-    toast({ title: "Preparing PDF", description: "Choose “Save as PDF” in the dialog that opens." });
-    setTimeout(() => window.print(), 250);
+    const root = previewRef.current;
+    if (!root) return;
+    setIsGeneratingPdf(true);
+    try {
+      await deliver(root);
+      toast({ title: doneMessage, description: `${selectedStudents.length * 2} pages at 85.6 × 53.98 mm, front and back separated.` });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Could not build the cards", description: error?.message || "Please try again." });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
   };
 
-  const handlePrint = () => {
-    window.print();
-    toast({ title: "Print Command Sent", description: "Sending batch to your institutional printer." });
-  };
+  const handleDownloadPdf = () =>
+    buildPdf((root) => downloadIdCardsPdf(root, `student_id_cards_${selectedStudents.length}`), "ID cards downloaded");
+
+  const handlePrint = () => buildPdf((root) => printIdCardsPdf(root), "Print dialog opened");
 
   return (
     <div className="space-y-8">
@@ -309,7 +322,7 @@ export default function IdCardsPage() {
           </DialogHeader>
 
           <div className="bg-muted p-8 print:p-0 print:bg-white min-h-[60vh]">
-            <div className="flex flex-col gap-12 items-center print:gap-8">
+            <div ref={previewRef} className="flex flex-col gap-12 items-center print:gap-8">
               {selectedStudents.map(id => {
                 const s = studentList.find((item: any) => item.id === id);
                 if (!s) return null;
