@@ -18,13 +18,23 @@ export type PerformanceReport = {
   academic_year: string;
   term: string;
   scope: string;
+  is_annual?: boolean;
+  pass_mark?: number;
   student_count: number;
+  passed_count?: number;
+  failed_count?: number;
+  promoted_count?: number;
+  repeated_count?: number;
   school_average: number;
   best: { name: string; matricule: string; class_name: string; average: number } | null;
   weakest: { name: string; matricule: string; class_name: string; average: number } | null;
   classes: Array<{
     class_name: string;
     student_count: number;
+    passed_count?: number;
+    failed_count?: number;
+    promoted_count?: number;
+    repeated_count?: number;
     class_average: number;
     top: Array<{ position: number; name: string; matricule: string; average: number }>;
     bottom: Array<{ position: number; name: string; matricule: string; average: number }>;
@@ -96,6 +106,36 @@ export async function buildPerformanceReportPdf(options: PerformanceReportOption
     headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontStyle: "bold", fontSize: 8 },
     bodyStyles: { fontStyle: "bold" },
   });
+  y = ((doc as any).lastAutoTable?.finalY ?? y) + 6;
+
+  // ---- Whole-school tally: sat / passed / failed (+ promoted / repeated) ----
+  const tallyHead = ["Students", "Passed", "Failed"];
+  const tallyBody = [
+    String(report.student_count ?? 0),
+    String(report.passed_count ?? 0),
+    String(report.failed_count ?? 0),
+  ];
+  if (report.is_annual) {
+    tallyHead.push("Promoted", "Repeated");
+    tallyBody.push(String(report.promoted_count ?? 0), String(report.repeated_count ?? 0));
+  }
+  autoTable(doc, {
+    startY: y,
+    margin: { left, right: 14 },
+    head: [tallyHead],
+    body: [tallyBody],
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 9, halign: "center", textColor: INK, lineColor: RULE, lineWidth: 0.2, cellPadding: 2.5 },
+    headStyles: { fillColor: [241, 245, 249], textColor: INK, fontStyle: "bold", fontSize: 8 },
+    bodyStyles: { fontStyle: "bold" },
+  });
+  if (report.pass_mark != null) {
+    y = ((doc as any).lastAutoTable?.finalY ?? y) + 4;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text(`Pass mark: ${avg(report.pass_mark)} / 20`, right, y, { align: "right" });
+  }
   y = ((doc as any).lastAutoTable?.finalY ?? y) + 8;
 
   // ---- Class by class ----
@@ -113,10 +153,16 @@ export async function buildPerformanceReportPdf(options: PerformanceReportOption
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...MUTED);
-    doc.text(
-      `${klass.student_count} learner(s)   |   class average ${avg(klass.class_average)} / 20`,
-      right, y, { align: "right" },
-    );
+    const classTally = [
+      `${klass.student_count} learner(s)`,
+      `${klass.passed_count ?? 0} passed`,
+      `${klass.failed_count ?? 0} failed`,
+      ...(report.is_annual
+        ? [`${klass.promoted_count ?? 0} promoted`, `${klass.repeated_count ?? 0} repeated`]
+        : []),
+      `avg ${avg(klass.class_average)} / 20`,
+    ].join("   |   ");
+    doc.text(classTally, right, y, { align: "right" });
     y += 3;
 
     const maxRows = Math.max(klass.top.length, klass.bottom.length);

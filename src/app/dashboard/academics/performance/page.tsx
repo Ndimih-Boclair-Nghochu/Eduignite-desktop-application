@@ -175,18 +175,55 @@ export default function PerformanceReportPage() {
             />
           </div>
 
+          {/* Whole-school tally: how many sat, passed and failed (and, for the
+              end-of-year report, how many were promoted or repeated). */}
+          <div className="flex flex-wrap gap-3">
+            <StatChip tone="primary" label="Students" value={report.student_count} />
+            <StatChip tone="green" label="Passed" value={report.passed_count ?? 0} />
+            <StatChip tone="red" label="Failed" value={report.failed_count ?? 0} />
+            {report.is_annual && (
+              <>
+                <StatChip tone="blue" label="Promoted" value={report.promoted_count ?? 0} />
+                <StatChip tone="amber" label="Repeated" value={report.repeated_count ?? 0} />
+              </>
+            )}
+            {report.pass_mark != null && (
+              <span className="ml-auto self-center text-[11px] font-semibold text-muted-foreground">
+                Pass mark {Number(report.pass_mark).toFixed(2)} / 20
+              </span>
+            )}
+          </div>
+
           {/* Class by class */}
           <div className="space-y-5">
             {(report.classes || []).map((klass: any) => (
               <Card key={klass.class_name} className="border-none shadow-sm">
-                <CardHeader className="flex-row items-center justify-between gap-4 pb-3">
+                <CardHeader className="flex-row items-start justify-between gap-4 pb-3">
                   <div>
                     <CardTitle className="text-base text-primary">{klass.class_name}</CardTitle>
                     <CardDescription>{klass.student_count} learner(s) with marks</CardDescription>
                   </div>
-                  <Badge className="border-none bg-primary/10 text-xs font-black text-primary">
-                    Class average {Number(klass.class_average).toFixed(2)} / 20
-                  </Badge>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Badge className="border-none bg-green-100 text-xs font-black text-green-700">
+                      {klass.passed_count ?? 0} passed
+                    </Badge>
+                    <Badge className="border-none bg-red-100 text-xs font-black text-red-700">
+                      {klass.failed_count ?? 0} failed
+                    </Badge>
+                    {report.is_annual && (
+                      <>
+                        <Badge className="border-none bg-blue-100 text-xs font-black text-blue-700">
+                          {klass.promoted_count ?? 0} promoted
+                        </Badge>
+                        <Badge className="border-none bg-amber-100 text-xs font-black text-amber-700">
+                          {klass.repeated_count ?? 0} repeated
+                        </Badge>
+                      </>
+                    )}
+                    <Badge className="border-none bg-primary/10 text-xs font-black text-primary">
+                      Avg {Number(klass.class_average).toFixed(2)} / 20
+                    </Badge>
+                  </div>
                 </CardHeader>
                 <CardContent className="grid gap-5 lg:grid-cols-2">
                   <RankTable title="Top of the class" rows={klass.top} tone="green" />
@@ -220,6 +257,22 @@ function HeadlineCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function StatChip({ label, value, tone }: { label: string; value: number; tone: "primary" | "green" | "red" | "blue" | "amber" }) {
+  const tones: Record<string, string> = {
+    primary: "bg-primary/10 text-primary",
+    green: "bg-green-100 text-green-700",
+    red: "bg-red-100 text-red-700",
+    blue: "bg-blue-100 text-blue-700",
+    amber: "bg-amber-100 text-amber-700",
+  };
+  return (
+    <span className={cn("flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black", tones[tone])}>
+      <span className="text-lg tabular-nums">{value}</span>
+      <span className="text-[10px] font-black uppercase tracking-widest opacity-80">{label}</span>
+    </span>
   );
 }
 
