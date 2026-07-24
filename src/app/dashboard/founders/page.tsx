@@ -746,7 +746,7 @@ export default function FoundersManagementPage() {
         onSubmit={handleUpdateFounder}
         submitLabel={updateFounderMutation.isPending ? "Saving..." : "Save Changes"}
         loading={updateFounderMutation.isPending}
-        disableRoleAndPrimaryShare={selectedFounder?.is_primary_founder}
+        disableRole={selectedFounder?.is_primary_founder}
       />
 
       <Dialog open={isSharesOpen} onOpenChange={setIsSharesOpen}>
@@ -948,7 +948,7 @@ function FounderDialog({
   onSubmit,
   submitLabel,
   loading,
-  disableRoleAndPrimaryShare = false,
+  disableRole = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -959,7 +959,7 @@ function FounderDialog({
   onSubmit: () => Promise<void>;
   submitLabel: string;
   loading: boolean;
-  disableRoleAndPrimaryShare?: boolean;
+  disableRole?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1016,7 +1016,7 @@ function FounderDialog({
             <Select
               value={form.role}
               onValueChange={(value) => setForm((prev) => ({ ...prev, role: value }))}
-              disabled={disableRoleAndPrimaryShare}
+              disabled={disableRole}
             >
               <SelectTrigger id={`${title}-role`}>
                 <SelectValue placeholder="Select role" />
@@ -1037,8 +1037,7 @@ function FounderDialog({
               inputMode="decimal"
               value={form.primarySharePercentage}
               onChange={(event) => setForm((prev) => ({ ...prev, primarySharePercentage: event.target.value }))}
-              disabled={disableRoleAndPrimaryShare}
-              placeholder="e.g. 8.50"
+              placeholder="e.g. 40 for the CEO, 27 for the CTO"
             />
           </Field>
 
@@ -1048,7 +1047,6 @@ function FounderDialog({
               inputMode="numeric"
               value={form.primaryShareUnits}
               onChange={(event) => setForm((prev) => ({ ...prev, primaryShareUnits: event.target.value }))}
-              disabled={disableRoleAndPrimaryShare}
               placeholder="e.g. 1000"
             />
           </Field>
