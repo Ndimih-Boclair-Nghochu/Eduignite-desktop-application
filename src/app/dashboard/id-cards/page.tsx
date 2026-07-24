@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
 import { useStudents } from "@/lib/hooks/useStudents";
 import { StudentIdCard } from "@/components/student-id-card";
-import { downloadIdCardsPdf, printIdCardsPdf } from "@/lib/id-card-pdf";
+import { printIdCardsExact } from "@/lib/id-card-print";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -151,7 +151,12 @@ export default function IdCardsPage() {
   // Both actions build the same file: one CR80 card per page, each side on its
   // own page. Printing the page itself put the whole batch on one sheet at
   // screen size, which is what lost the card proportions.
-  const buildPdf = async (deliver: (root: HTMLElement) => Promise<void>, doneMessage: string) => {
+  // The cards are printed through the browser's own engine — each side on its
+  // own CR80 page — so a "Save as PDF" from the dialog is pixel-identical to the
+  // card on screen. This replaces the html2canvas capture, which could never be
+  // exact. Both buttons open the same dialog: download = Save as PDF, print =
+  // send to a printer.
+  const runPrint = async (doneDescription: string) => {
     if (selectedStudents.length === 0) {
       toast({ variant: "destructive", title: "No Students Selected", description: "Please select at least one student to generate IDs." });
       return;
@@ -160,19 +165,19 @@ export default function IdCardsPage() {
     if (!root) return;
     setIsGeneratingPdf(true);
     try {
-      await deliver(root);
-      toast({ title: doneMessage, description: `${selectedStudents.length * 2} pages at 85.6 × 53.98 mm, front and back separated.` });
+      await printIdCardsExact(root);
+      toast({ title: "Ready to save", description: doneDescription });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Could not build the cards", description: error?.message || "Please try again." });
+      toast({ variant: "destructive", title: "Could not open the cards", description: error?.message || "Please try again." });
     } finally {
       setIsGeneratingPdf(false);
     }
   };
 
   const handleDownloadPdf = () =>
-    buildPdf((root) => downloadIdCardsPdf(root, `student_id_cards_${selectedStudents.length}`), "ID cards downloaded");
+    runPrint('In the dialog, choose "Save as PDF" — the file is exactly the card on screen, one side per page.');
 
-  const handlePrint = () => buildPdf((root) => printIdCardsPdf(root), "Print dialog opened");
+  const handlePrint = () => runPrint("Sending the cards to your printer, one card side per page at 85.6 × 53.98 mm.");
 
   return (
     <div className="space-y-8">
